@@ -1,0 +1,19 @@
+backend:
+  name: github
+  repo: mandeepsingh75/mandeepsingh75.github.io # Your repo path
+  branch: main
+
+media_folder: "assets/images" # Where photos you upload will go
+public_folder: "/assets/images"
+
+collections:
+  - name: "blog"
+    label: "Daily Vlogs"
+    folder: "_posts"
+    create: true
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    fields:
+      - {label: "Layout", name: "layout", widget: "hidden", default: "post"}
+      - {label: "Title", name: "title", widget: "string"}
+      - {label: "Publish Date", name: "date", widget: "datetime"}
+      - {label: "Body", name: "body", widget: "markdown"}
