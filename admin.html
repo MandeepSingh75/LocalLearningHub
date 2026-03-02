@@ -280,7 +280,7 @@ input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(192,99,58,0.
           <h3 id="g-form-title">+ New Post</h3>
           <div class="form-row">
             <div class="field"><label>Date</label><input type="text" id="g-date"></div>
-            <div class="field"><label>Tag / Category</label><input type="text" id="g-tag" placeholder="Politics, Tech, Society…"></div>
+            <div class="field"><label>Tags <span style="font-weight:300;text-transform:none;letter-spacing:0">(separate with 2 spaces)</span></label><input type="text" id="g-tag" placeholder="Politics  Tech  Society"></div>
           </div>
           <div class="field"><label>Headline</label><input type="text" id="g-title" placeholder="What's on your mind?"></div>
           <div class="field"><label>Your Thoughts</label>
@@ -675,7 +675,9 @@ function editGoings(i){
   $('g-date').value=c.querySelector('.going-date')?.textContent?.trim()||'';
   $('g-title').value=c.querySelector('h2')?.textContent?.trim()||'';
   setEditorHTML('g-body', c.querySelector('p')?.innerHTML||'');
-  $('g-tag').value=c.querySelector('.going-tag')?.textContent?.trim()||'';
+  // Restore tags — join existing tags with double space
+  const existingTags=[...doc.querySelectorAll('.going-card')[i].querySelectorAll('.going-tag')].map(t=>t.textContent).join('  ');
+  $('g-tag').value=existingTags;
   editMode={s:'goings',i};$('g-btn').textContent='💾 Save Post';$('g-form-title').textContent='Edit Post';
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -689,8 +691,29 @@ async function deleteGoings(i){
     toast('Post deleted!','success');loadGoings();
   }catch(e){toast('Error: '+e.message,'error');}
 }
+function makeActionBar(id){
+  return `
+    <div class="action-bar">
+      <button class="action-btn" id="like-${id}" onclick="toggleLike('${id}')">👍 <span class="label">Like</span> <span id="like-count-${id}">0</span></button>
+      <button class="action-btn" id="dislike-${id}" onclick="toggleDislike('${id}')">👎 <span class="label">Dislike</span> <span id="dislike-count-${id}">0</span></button>
+      <button class="action-btn" id="comment-btn-${id}" onclick="toggleComments('${id}')">💬 <span class="label">Comments</span> <span id="comment-count-${id}">0</span></button>
+      <div class="action-spacer"></div>
+      <button class="action-btn" onclick="copyPost('${id}')">📋 <span class="label">Copy</span></button>
+      <button class="action-btn" onclick="sharePost('${id}')">🔗 <span class="label">Share</span></button>
+    </div>
+    <div class="comments-section" id="comments-${id}">
+      <div class="comments-title">💬 Comments</div>
+      <div id="comments-list-${id}"><div class="no-comments">No comments yet — be the first!</div></div>
+      <div class="comment-form">
+        <div class="comment-row"><input type="text" id="name-${id}" placeholder="Your name" maxlength="40"></div>
+        <textarea id="text-${id}" placeholder="Write a comment…" maxlength="500"></textarea>
+        <div><button class="comment-submit" onclick="submitComment('${id}')">Post Comment</button></div>
+      </div>
+    </div>`;
+}
+
 async function publishGoings(){
-  const date=$('g-date').value.trim(),tag=$('g-tag').value.trim(),title=$('g-title').value.trim();
+  const date=$('g-date').value.trim(),title=$('g-title').value.trim(),tagRaw=$('g-tag').value;
   const body=getEditorHTML('g-body').trim();
   if(!title||!body){toast('Title and content required.','error');return;}
   $('g-btn').disabled=true;setStatus('g-status','Saving…');
@@ -699,14 +722,26 @@ async function publishGoings(){
     const doc=new DOMParser().parseFromString(decode(f),'text/html');
     const container=doc.querySelector('.container');
     if(editMode.s==='goings'){
+      // Edit existing — just update text, keep action bar intact
       const c=[...doc.querySelectorAll('.going-card')][editMode.i];
       c.querySelector('.going-date').textContent=date;
       c.querySelector('h2').textContent=title;
       c.querySelector('p').innerHTML=body;
-      if(c.querySelector('.going-tag'))c.querySelector('.going-tag').textContent=tag;
+      // Update tags — remove old ones and add new
+      c.querySelectorAll('.going-tag').forEach(t=>t.remove());
+      const editTags=tagRaw.split(/  +/).map(t=>t.trim()).filter(Boolean);
+      const actionBar=c.querySelector('.action-bar');
+      editTags.forEach(tag=>{const s=document.createElement('span');s.className='going-tag';s.textContent=tag;c.insertBefore(s,actionBar);});
     } else {
-      const card=doc.createElement('div');card.className='going-card';
-      card.innerHTML=`<span class="going-date">${date}</span><h2>${title}</h2><p>${body}</p>${tag?`<span class="going-tag">${tag}</span>`:''}`;
+      // New post — generate unique ID and include full action bar + comments
+      const id='post-'+Date.now();
+      const card=doc.createElement('div');
+      card.className='going-card';
+      card.setAttribute('data-post-id', id);
+      // Split tags by 2+ spaces
+      const tags=tagRaw.split(/  +/).map(t=>t.trim()).filter(Boolean);
+      const tagsHtml=tags.map(t=>`<span class="going-tag">${t}</span>`).join('');
+      card.innerHTML=`<span class="going-date">${date}</span><h2>${title}</h2><p>${body}</p>${tagsHtml}${makeActionBar(id)}`;
       container.prepend(card);
     }
     await putFile('goings/index.html','<!DOCTYPE html>\n'+doc.documentElement.outerHTML,f.sha,(editMode.s==='goings'?'✏️ Edit':'✨ Add')+` going: ${title}`);
